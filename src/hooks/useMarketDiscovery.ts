@@ -18,6 +18,8 @@ export function useMarketDiscovery(
     isRefreshing: false,
     error: null,
     lastUpdated: null,
+    isStale: false,
+    staleFetchedAt: null,
     stats: {
       totalDiscovered: 0,
       tradableCount: 0,
@@ -37,10 +39,11 @@ export function useMarketDiscovery(
     }));
 
     try {
-      const allMarkets = await MarketDiscoveryService.discoverMarkets(filter, 60);
+      const result = await MarketDiscoveryService.discoverMarkets(filter, 60);
       
       if (!isMountedRef.current) return;
 
+      const allMarkets = result.markets;
       const tradableMarkets = allMarkets.filter(m => m.isTradable);
       const btcActive = tradableMarkets.filter(m => m.asset.toUpperCase() === 'BTC');
       const ethActive = tradableMarkets.filter(m => m.asset.toUpperCase() === 'ETH');
@@ -51,6 +54,8 @@ export function useMarketDiscovery(
         isRefreshing: false,
         error: null,
         lastUpdated: new Date(),
+        isStale: result.isStale,
+        staleFetchedAt: result.isStale ? result.fetchedAt : null,
         stats: {
           totalDiscovered: allMarkets.length,
           tradableCount: tradableMarkets.length,
@@ -115,3 +120,4 @@ export function useMarketDiscovery(
     refetch,
   };
 }
+

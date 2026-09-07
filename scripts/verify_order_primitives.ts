@@ -5,7 +5,8 @@ async function verifyOrderExecutionPrimitives() {
   console.log('=== VERIFYING ORDER EXECUTION PRIMITIVES ===\n');
 
   // 1. Discover a live market
-  const markets = await MarketDiscoveryService.discoverMarkets({ tradableOnly: true }, 5);
+  const result = await MarketDiscoveryService.discoverMarkets({ tradableOnly: true }, 5);
+  const markets = result.markets;
   if (markets.length === 0) {
     throw new Error('No live tradable markets found on Shannon testnet');
   }

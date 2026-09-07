@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUpRight, ArrowDownRight, Clock } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Clock, AlertTriangle } from 'lucide-react';
 import { useMarketDiscovery } from '../hooks/useMarketDiscovery';
 import type { NormalizedEventMarket } from '../types/market';
 
@@ -61,7 +61,7 @@ function MarketItem({ market }: { market: NormalizedEventMarket }) {
 }
 
 export const LiveMarketsStrip: React.FC<LiveMarketsStripProps> = ({ maxItems = 6 }) => {
-  const { markets, isLoading, error, stats } = useMarketDiscovery(
+  const { markets, isLoading, error, stats, isStale } = useMarketDiscovery(
     { asset: 'ALL', tradableOnly: true },
     30000
   );
@@ -89,6 +89,16 @@ export const LiveMarketsStrip: React.FC<LiveMarketsStripProps> = ({ maxItems = 6
             </div>
           )}
         </div>
+
+        {/* Stale data banner — shown when serving cached results after indexer failure */}
+        {isStale && !isLoading && (
+          <div className="stale-data-banner" role="alert">
+            <AlertTriangle size={14} />
+            <span>
+              Testnet temporarily unreachable. Showing last known markets — data may be outdated.
+            </span>
+          </div>
+        )}
 
         {isLoading && (
           <div className="live-markets-loading">
@@ -123,3 +133,4 @@ export const LiveMarketsStrip: React.FC<LiveMarketsStripProps> = ({ maxItems = 6
     </section>
   );
 };
+

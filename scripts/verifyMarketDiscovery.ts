@@ -6,10 +6,11 @@ async function verify() {
   console.log('Invoking: MarketDiscoveryService.discoverMarkets()...\n');
 
   const startTime = Date.now();
-  const markets = await MarketDiscoveryService.discoverMarkets({ asset: 'ALL', tradableOnly: false }, 50);
+  const result = await MarketDiscoveryService.discoverMarkets({ asset: 'ALL', tradableOnly: false }, 50);
+  const markets = result.markets;
   const duration = Date.now() - startTime;
 
-  console.log(`Successfully retrieved and normalized ${markets.length} Event Contract markets in ${duration}ms.\n`);
+  console.log(`Successfully retrieved and normalized ${markets.length} Event Contract markets in ${duration}ms.${result.isStale ? ' (STALE — served from cache)' : ''}\n`);
 
   const tradable = markets.filter(m => m.isTradable);
   const btcMarkets = markets.filter(m => m.asset === 'BTC');

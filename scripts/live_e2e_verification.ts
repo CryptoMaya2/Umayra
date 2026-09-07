@@ -62,7 +62,8 @@ async function main() {
   let tradableMarkets: NormalizedEventMarket[] = [];
 
   try {
-    allMarkets = await MarketDiscoveryService.discoverMarkets({ asset: 'BTC', tradableOnly: false }, 30);
+    const result = await MarketDiscoveryService.discoverMarkets({ asset: 'BTC', tradableOnly: false }, 30);
+    allMarkets = result.markets;
     tradableMarkets = allMarkets.filter(m => m.isTradable);
 
     console.log(`   Total BTC markets from indexer: ${allMarkets.length}`);

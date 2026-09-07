@@ -7,7 +7,8 @@ async function testOrderExecutionFlow() {
 
   // 1. Discover Active Live Market on Somnia Shannon Testnet
   console.log('1. Discovering Live Event Contracts...');
-  const markets = await MarketDiscoveryService.discoverMarkets({}, 10);
+  const result = await MarketDiscoveryService.discoverMarkets({}, 10);
+  const markets = result.markets;
   console.log(`   Discovered ${markets.length} total markets.`);
   const tradableMarkets = markets.filter(m => m.isTradable);
   console.log(`   Found ${tradableMarkets.length} live tradable markets.`);

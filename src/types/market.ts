@@ -88,6 +88,10 @@ export interface MarketDiscoveryState {
   isRefreshing: boolean;
   error: string | null;
   lastUpdated: Date | null;
+  /** True when the markets are being served from cache due to indexer failure */
+  isStale: boolean;
+  /** ISO timestamp of when the stale data was originally fetched (null when fresh) */
+  staleFetchedAt: string | null;
   stats: {
     totalDiscovered: number;
     tradableCount: number;
@@ -95,3 +99,4 @@ export interface MarketDiscoveryState {
     ethActiveCount: number;
   };
 }
+

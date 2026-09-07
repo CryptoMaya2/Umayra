@@ -116,8 +116,9 @@ async function runTests() {
 
   // Test 4: Live Market Discovery verification
   console.log('\n6. Testing Direct Live Market Discovery from Somnia Shannon Testnet');
-  const allMarkets = await MarketDiscoveryService.discoverMarkets({}, 20);
-  console.log(`   Total Discovered Markets on Shannon: ${allMarkets.length}`);
+  const discoveryResult = await MarketDiscoveryService.discoverMarkets({}, 20);
+  const allMarkets = discoveryResult.markets;
+  console.log(`   Total Discovered Markets on Shannon: ${allMarkets.length}${discoveryResult.isStale ? ' (STALE)' : ''}`);
   const tradable = allMarkets.filter(m => m.isTradable);
   console.log(`   Tradable on-chain markets: ${tradable.length}`);
   if (allMarkets.length > 0) {

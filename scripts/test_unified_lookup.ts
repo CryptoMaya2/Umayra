@@ -3,7 +3,8 @@ import { MarketDiscoveryService } from '../src/services/marketDiscoveryService';
 
 async function testLookup() {
   await somniaExchange.loadMarkets();
-  const markets = await MarketDiscoveryService.discoverMarkets({ tradableOnly: true }, 5);
+  const result = await MarketDiscoveryService.discoverMarkets({ tradableOnly: true }, 5);
+  const markets = result.markets;
   if (markets.length > 0) {
     const m = markets[0];
     const um = Object.values(somniaExchange.markets).find(

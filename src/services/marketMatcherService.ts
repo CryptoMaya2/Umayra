@@ -34,17 +34,19 @@ export class MarketMatcherService {
 
     try {
       // 1. Fetch currently tradable unexpired markets for the requested asset
-      const tradableMarkets = await MarketDiscoveryService.discoverMarkets({
+      const tradableResult = await MarketDiscoveryService.discoverMarkets({
         asset: intent.asset,
         tradableOnly: true,
       }, 50);
+      const tradableMarkets = tradableResult.markets;
 
       if (tradableMarkets.length === 0) {
         // Double check all discovered to see if any are in other lifecycle phases
-        const allDiscovered = await MarketDiscoveryService.discoverMarkets({
+        const allResult = await MarketDiscoveryService.discoverMarkets({
           asset: intent.asset,
           tradableOnly: false,
         }, 10);
+        const allDiscovered = allResult.markets;
 
         if (allDiscovered.length > 0) {
           return {
