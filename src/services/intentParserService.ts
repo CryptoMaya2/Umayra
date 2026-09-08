@@ -304,6 +304,33 @@ export class IntentParserService {
           selectedMarket: targetMarket,
         };
       }
+
+      // Subcase E: Informational questions about the active selected market (e.g. "What exactly am I betting on?", "Explain this", "How does this work?")
+      const infoQuestionRegex = /\b(what\s+.*betting\s+on|what\s+is\s+this|how\s+does\s+(?:this|it)\s+work|explain|rules|details|what\s+does\s+this\s+mean|tell\s+me\s+about\s+this|what\s+is\s+the\s+strike)\b/i;
+      if (infoQuestionRegex.test(text)) {
+        const targetMarket = selectedMarketContext.market;
+        const targetDirection = selectedMarketContext.direction;
+        const isUp = targetDirection === 'UP';
+        const strikeDesc = targetMarket.strike > 0 
+          ? `$${targetMarket.strike.toLocaleString('en-US', { minimumFractionDigits: 2 })}` 
+          : 'the open reference price';
+
+        const explanation = `You are predicting that **${targetMarket.asset}** will finish **${isUp ? 'ABOVE' : 'BELOW'} ${strikeDesc}** at expiry (${targetMarket.expiryDateString.slice(0, 22)} UTC). Each winning contract settles at **$1.00 USDC**.\n\nWhen you're ready, specify your trade amount (e.g., "$10" or "25 dollars") or confirm below to execute.`;
+
+        return {
+          rawText,
+          action: 'EXPLAIN',
+          asset: targetMarket.asset as IntentAsset,
+          direction: targetDirection,
+          timeframeSec: targetMarket.secondsRemaining,
+          timeframeLabel: targetMarket.expiryDateString,
+          tradeAmount: selectedMarketContext.tradeAmount || null,
+          isComplete: true,
+          missingFields: [],
+          clarificationPrompt: explanation,
+          selectedMarket: targetMarket,
+        };
+      }
     }
 
     // 3. Standard Prediction Intent Parsing (action: 'PREDICT')

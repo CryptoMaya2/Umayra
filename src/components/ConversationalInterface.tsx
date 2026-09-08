@@ -92,8 +92,108 @@ export const ConversationalInterface: React.FC = () => {
       // 2. Parse text intent deterministically, passing both partial pending context and active selected market context
       const intent = IntentParserService.parse(rawText, pendingContext, activeMarketContext);
 
-      // 3. Handle Contextual Follow-up Trade Action on Active Market
+      // 3. Handle Informational / Explanatory Questions about Active Market
+      if (intent.action === 'EXPLAIN' && activeMarketContext) {
+        const replyText = intent.clarificationPrompt || "You are viewing an active Event Contract. Specify an amount to trade or review below.";
+        const assistantMessage: ChatMessage = {
+          id: assistantMsgId,
+          sender: 'assistant',
+          timestamp: new Date(),
+          text: replyText,
+          intent,
+          matchedMarket: activeMarketContext.market,
+          status: 'success',
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+        if (isVoiceInput) {
+          speak(replyText.replace(/\*\*/g, ''));
+        }
+        setIsProcessing(false);
+        return;
+      }
+
+      // 4. Handle Contextual Follow-up Trade Action on Active Market
       if (intent.action === 'PLACE_TRADE' && activeMarketContext) {
+        const targetMarket = activeMarketContext.market;
+        const targetDirection = activeMarketContext.direction;
+        const tradeAmount = intent.tradeAmount || activeMarketContext.tradeAmount || 10;
+        const nowSec = Math.floor(Date.now() / 1000);
+        const isExpired = targetMarket.expiry <= nowSec || targetMarket.secondsRemaining <= 0;
+
+        // If the selected market has expired before confirmation:
+        // Automatically re-resolve the original intent against the current live DreamDEX market
+        if (isExpired) {
+          const successorMarket = await MarketMatcherService.findSuccessorMarket(
+            targetMarket.asset as any,
+            targetDirection,
+            targetMarket.marketId
+          );
+
+          if (successorMarket) {
+            const timeRemainingStr = successorMarket.secondsRemaining < 60 
+              ? `${successorMarket.secondsRemaining}s` 
+              : `${Math.round(successorMarket.secondsRemaining / 60)}m`;
+
+            const strikeDesc = successorMarket.strike > 0 
+              ? `$${successorMarket.strike.toLocaleString('en-US', { minimumFractionDigits: 2 })}` 
+              : 'the open reference price';
+
+            const rolloverMessage = `The previous **${targetMarket.symbol}** market has expired. I've found the current active series **${successorMarket.symbol}** (strike: ${strikeDesc}, expires in ~${timeRemainingStr}).\n\nI've configured your position for **$${tradeAmount} USDC** on **${successorMarket.asset} ${targetDirection}**. Review your position details below and confirm when you're ready to execute.`;
+
+            setActiveMarketContext({
+              market: successorMarket,
+              direction: targetDirection,
+              tradeAmount,
+              originalIntent: {
+                asset: targetMarket.asset as any,
+                direction: targetDirection,
+              },
+            });
+
+            const assistantMessage: ChatMessage = {
+              id: assistantMsgId,
+              sender: 'assistant',
+              timestamp: new Date(),
+              text: rolloverMessage,
+              intent: {
+                ...intent,
+                selectedMarket: successorMarket,
+                timeframeSec: successorMarket.secondsRemaining,
+                timeframeLabel: successorMarket.expiryDateString,
+              },
+              matchedMarket: successorMarket,
+              initialTradeAmount: tradeAmount,
+              initialReviewOpen: true,
+              status: 'success',
+            };
+
+            setMessages(prev => [...prev, assistantMessage]);
+            if (isVoiceInput) {
+              speak(`The previous market expired. I've found the current active series ${successorMarket.symbol}. Please review and confirm your trade.`);
+            }
+            setIsProcessing(false);
+            return;
+          } else {
+            // No suitable live successor market found
+            const noSuccessorText = `The previous **${targetMarket.symbol}** market has expired, and no active ${targetMarket.asset} series are currently open on DreamDEX. New series deploy regularly on Somnia testnet — please try again in a few moments.`;
+            const assistantMessage: ChatMessage = {
+              id: assistantMsgId,
+              sender: 'assistant',
+              timestamp: new Date(),
+              text: noSuccessorText,
+              intent,
+              status: 'no_market_found',
+            };
+            setMessages(prev => [...prev, assistantMessage]);
+            if (isVoiceInput) {
+              speak(`The previous market has expired, and no active ${targetMarket.asset} series are currently open on DreamDEX. Please try again in a moment.`);
+            }
+            setIsProcessing(false);
+            return;
+          }
+        }
+
+        // Market is still live and unexpired:
         if (!intent.isComplete) {
           const replyText = intent.clarificationPrompt || "How much would you like to trade?";
           const clarificationMessage: ChatMessage = {
@@ -113,10 +213,6 @@ export const ConversationalInterface: React.FC = () => {
         }
 
         // Complete PLACE_TRADE with valid amount
-        const tradeAmount = intent.tradeAmount || 10;
-        const targetMarket = activeMarketContext.market;
-        const targetDirection = activeMarketContext.direction;
-
         const confirmIntro = `I've configured your position for **$${tradeAmount} USDC** on **${targetMarket.asset} ${targetDirection}** (${targetMarket.symbol}).\n\nReview your position details below and confirm when you're ready.`;
 
         const assistantMessage: ChatMessage = {
@@ -135,6 +231,10 @@ export const ConversationalInterface: React.FC = () => {
           market: targetMarket,
           direction: targetDirection,
           tradeAmount,
+          originalIntent: {
+            asset: targetMarket.asset as any,
+            direction: targetDirection,
+          },
         });
 
         setMessages(prev => [...prev, assistantMessage]);
@@ -184,6 +284,12 @@ export const ConversationalInterface: React.FC = () => {
         setActiveMarketContext({
           market: matchResult.matchedMarket,
           direction: intent.direction!,
+          originalIntent: {
+            asset: intent.asset!,
+            direction: intent.direction!,
+            timeframeSec: intent.timeframeSec,
+            timeframeLabel: intent.timeframeLabel,
+          },
         });
       } else {
         setActiveMarketContext(null);

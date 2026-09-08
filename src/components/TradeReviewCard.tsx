@@ -135,6 +135,25 @@ export const TradeReviewCard: React.FC<TradeReviewCardProps> = ({
       return;
     }
 
+    const currentTimeSec = Math.floor(Date.now() / 1000);
+    if (market.expiry <= currentTimeSec) {
+      setExecutionResult({
+        success: false,
+        txHash: null,
+        explorerUrl: null,
+        marketSymbol: market.symbol,
+        asset: market.asset,
+        direction,
+        tradeAmountUsdc: tradeAmount,
+        executionPrice: 0,
+        sharesReceived: 0,
+        status: 'failed',
+        statusMessage: 'Market expired',
+        error: 'This market series has reached its expiry timestamp and cannot be traded. Please return to chat to trade an active series.',
+      });
+      return;
+    }
+
     setIsExecuting(true);
     setExecutionResult(null);
 

@@ -36,7 +36,26 @@ export class OrderExecutionService {
   public static async executeOrder(params: OrderExecutionParams): Promise<OrderExecutionResult> {
     const { market, direction, tradeAmountUsdc, userAddress } = params;
 
-    // 1. Pre-flight Verification: Browser Wallet Check
+    // 1. Pre-flight Verification: Market Expiry Check
+    const clientNowSec = Math.floor(Date.now() / 1000);
+    if (market.expiry <= clientNowSec) {
+      return {
+        success: false,
+        txHash: null,
+        explorerUrl: null,
+        marketSymbol: market.symbol,
+        asset: market.asset,
+        direction,
+        tradeAmountUsdc,
+        executionPrice: 0,
+        sharesReceived: 0,
+        status: 'failed',
+        statusMessage: 'Market expired',
+        error: `Market ${market.symbol} has expired (expiry timestamp: ${market.expiryDateString}). Trades cannot be executed on expired contracts.`,
+      };
+    }
+
+    // 2. Pre-flight Verification: Browser Wallet Check
     if (!WalletService.isWalletAvailable()) {
       return {
         success: false,
@@ -56,7 +75,7 @@ export class OrderExecutionService {
 
     const ethereum = (window as any).ethereum;
 
-    // 2. Pre-flight Verification: Network Check
+    // 3. Pre-flight Verification: Network Check
     try {
       const chainIdHex = await ethereum.request({ method: 'eth_chainId' });
       const currentChainId = parseInt(chainIdHex, 16);
@@ -93,7 +112,8 @@ export class OrderExecutionService {
       };
     }
 
-    // 3. Pre-flight Verification: Live On-Chain Status Gating
+    // 4. Pre-flight Verification: Live On-Chain Status Gating
+
     try {
       const onchain = await somniaClient.getMarketOnchain(market.marketId as `0x${string}`);
       const nowSec = Math.floor(Date.now() / 1000);

@@ -65,31 +65,45 @@ export class MarketMatcherService {
         };
       }
 
-      // 2. Filter for markets with sufficient remaining trading window (at least 45s buffer)
-      // This prevents matching series that expire while the user is reading or approving the transaction
-      const MIN_EXECUTION_BUFFER_SEC = 45;
-      const viableMarkets = tradableMarkets.filter(m => m.secondsRemaining >= MIN_EXECUTION_BUFFER_SEC);
+      // 2. Filter for markets with sufficient remaining trading window.
+      // If markets with at least 60s buffer exist, filter out ones expiring immediately (<60s).
+      const MIN_PREFERRED_BUFFER_SEC = 60;
+      const viableMarkets = tradableMarkets.filter(m => m.secondsRemaining >= MIN_PREFERRED_BUFFER_SEC);
       const candidatePool = viableMarkets.length > 0 ? viableMarkets : tradableMarkets;
 
-      // 3. Rank candidate markets based on requested timeframe
+      // 3. Rank candidate markets based on user intent and time remaining
       let matchedMarket: NormalizedEventMarket | null = null;
       let candidateMarkets: NormalizedEventMarket[] = [];
 
       if (intent.timeframeSec && intent.timeframeSec > 0) {
-        // Sort by how close the market's remaining time is to the requested timeframe
-        const sortedByTimeDelta = [...candidatePool].sort((a, b) => {
+        // When timeframe is specified: prefer markets matching the requested duration tier,
+        // and between comparable matches, prefer the one with more time remaining.
+        const sorted = [...candidatePool].sort((a, b) => {
           const deltaA = Math.abs(a.secondsRemaining - (intent.timeframeSec || 0));
           const deltaB = Math.abs(b.secondsRemaining - (intent.timeframeSec || 0));
+          // If both are within 5 minutes of each other in timeframe delta, prefer more time remaining
+          if (Math.abs(deltaA - deltaB) <= 300) {
+            return b.secondsRemaining - a.secondsRemaining;
+          }
           return deltaA - deltaB;
         });
 
-        matchedMarket = sortedByTimeDelta[0] || null;
-        candidateMarkets = sortedByTimeDelta.slice(0, 3);
+        matchedMarket = sorted[0] || null;
+        candidateMarkets = sorted.slice(0, 3);
       } else {
-        // Default to the active unexpired market with best remaining window
-        const sortedByExpiry = [...candidatePool].sort((a, b) => a.expiry - b.expiry);
-        matchedMarket = sortedByExpiry[0] || null;
-        candidateMarkets = sortedByExpiry.slice(0, 3);
+        // When no specific timeframe is specified:
+        // Prefer suitable live markets with more time remaining before expiry (avoid near-expiry traps),
+        // filtering out ultra-long multi-week series if active intraday/daily series (<= 2 days) exist.
+        const sensiblePool = candidatePool.filter(m => m.secondsRemaining <= 172800);
+        const poolToUse = sensiblePool.length > 0 ? sensiblePool : candidatePool;
+
+        const sortedByRemainingTime = [...poolToUse].sort((a, b) => {
+          // Prefer market with more time remaining before expiry
+          return b.secondsRemaining - a.secondsRemaining;
+        });
+
+        matchedMarket = sortedByRemainingTime[0] || null;
+        candidateMarkets = sortedByRemainingTime.slice(0, 3);
       }
 
       if (!matchedMarket) {
@@ -127,5 +141,42 @@ export class MarketMatcherService {
         hasMatch: false,
       };
     }
+  }
+
+  /**
+   * Re-resolves an active user intent against current live markets when the previous market has expired.
+   * Finds the best live tradable successor market for the given asset and direction.
+   */
+  public static async findSuccessorMarket(
+    asset: 'BTC' | 'ETH',
+    direction: 'UP' | 'DOWN',
+    expiredMarketId?: string
+  ): Promise<NormalizedEventMarket | null> {
+    const res = await this.matchIntent({
+      rawText: `Live ${asset} ${direction} market`,
+      action: 'PREDICT',
+      asset,
+      direction,
+      timeframeSec: null,
+      timeframeLabel: null,
+      isComplete: true,
+      missingFields: [],
+      clarificationPrompt: null,
+    });
+
+    if (res.hasMatch && res.matchedMarket) {
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (expiredMarketId && res.matchedMarket.marketId === expiredMarketId) {
+        const next = res.candidateMarkets.find(
+          m => m.marketId !== expiredMarketId && m.isTradable && m.expiry > nowSec
+        );
+        return next || null;
+      }
+      // Ensure the returned market is not expired
+      if (res.matchedMarket.expiry > nowSec && res.matchedMarket.isTradable) {
+        return res.matchedMarket;
+      }
+    }
+    return null;
   }
 }

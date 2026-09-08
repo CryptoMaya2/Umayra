@@ -2,12 +2,18 @@ import type { NormalizedEventMarket } from './market';
 
 export type IntentAsset = 'BTC' | 'ETH';
 export type IntentDirection = 'UP' | 'DOWN';
-export type IntentAction = 'PREDICT' | 'PLACE_TRADE' | 'CLARIFY';
+export type IntentAction = 'PREDICT' | 'PLACE_TRADE' | 'CLARIFY' | 'EXPLAIN';
 
 export interface SelectedMarketContext {
   market: NormalizedEventMarket;
   direction: IntentDirection;
   tradeAmount?: number | null;
+  originalIntent?: {
+    asset: IntentAsset;
+    direction: IntentDirection;
+    timeframeSec?: number | null;
+    timeframeLabel?: string | null;
+  };
 }
 
 export interface ParsedMarketIntent {
